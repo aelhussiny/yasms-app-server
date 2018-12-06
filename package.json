@@ -1,0 +1,27 @@
+{
+  "name": "yasms3000",
+  "version": "1.0.0",
+  "description": "Security Project Server. Yet another secure messaging service.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aelhussiny/yasms-server.git"
+  },
+  "author": "aelhussiny, mrefaat, nayman, nkamel",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/aelhussiny/yasms-server/issues"
+  },
+  "homepage": "https://github.com/aelhussiny/yasms-server#readme",
+  "dependencies": {
+    "body-parser": "^1.18.3",
+    "express": "^4.16.4",
+    "http": "0.0.0",
+    "node-rsa": "^1.0.1",
+    "request": "^2.88.0",
+    "sqlite-cipher": "^0.3.6"
+  }
+}

@@ -10,6 +10,7 @@ const fs = require('fs');
 
 const app = express()
 const myprofile = {}
+const timetolive = 5000;
 let centralserver = "";
 
 let servercommunicationkey = new NodeRSA().generateKeyPair(1024);
@@ -56,6 +57,14 @@ const encryptForCS = (msg) => {
     return centralservercommunicationkey.encrypt(msg, 'base64');
 }
 
+const encryptForFriend = (friendkey, msg) => {
+    return friendkey.encrypt(msg, 'base64');
+}
+
+const unsignFriend = (friendkey, msg) => {
+    return friendkey.decryptPublic(msg).toString('utf-8');
+}
+
 const decryptFromFE = (msg) => {
     return servercommunicationkey.decrypt(msg).toString('utf-8');
 }
@@ -97,13 +106,22 @@ app.post('/register', (req, res) => {
                     yasmscode: 2
                 });
             } else {
-                if (JSON.parse(unsignCS(body)).status && JSON.parse(unsignCS(body)).status == "success") {
+                body = unsignCS(body);
+                if (JSON.parse(body).status && JSON.parse(body).status == "success") {
                     sqlite.connect("./db/" + username + ".enc", dbkey.exportKey('private'));
                     sqlite.run("CREATE TABLE MYSIGNINGKEY(key TEXT PRIMARY KEY);", (resp) => {
                         if (resp.error)
                             throw res.error;
                     });
                     sqlite.run("CREATE TABLE MYIDENTITIES(identityname TEXT PRIMARY KEY);", (resp) => {
+                        if (resp.error)
+                            throw res.error;
+                    });
+                    sqlite.run("CREATE TABLE RECEIVEDFRIENDREQUESTS(sender TEXT, status INTEGER, receivedat TEXT NOT NULL, PRIMARY KEY (sender, receivedat);", (res) => {
+                        if (resp.error)
+                            throw res.error;
+                    });
+                    sqlite.run("CREATE TABLE SENTFRIENDREQUESTS(receiver TEXT, status INTEGER, sentat TEXT NOT NULL, PRIMARY KEY (receiver, sentat);", (res) => {
                         if (resp.error)
                             throw res.error;
                     });
@@ -158,7 +176,16 @@ app.post('/updateaddress', (req, res) => {
                         yasmscode: 2
                     });
                 } else {
-                    res.send(sign(encryptForFE(body)));
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        res.send(sign(encryptForFE(body)));
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 3
+                        })
+                    }
                 }
             });
         } else {
@@ -177,21 +204,268 @@ app.post('/updateaddress', (req, res) => {
 });
 
 app.post('/searchidentities', (req, res) => {
-    // SEND REQUEST TO CENTRAL SERVER /SEARCHIDENTITIES WITH IDENTITY PARAM.
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        if (myprofile.username) {
+            request.post({
+                url: centralserver + "/searchidentities",
+                body: {
+                    username: myprofile.username,
+                    command: signAsUser(JSON.stringify({
+                        command: "searchidentities",
+                        query: decryptedmessage.query,
+                        timestamp: (new Date()).getTime()
+                    }))
+                },
+                json: true
+            }, (err, serres, body) => {
+                if (err || serres.statusCode !== 200) {
+                    res.status(500);
+                    res.send({
+                        ...err,
+                        yasmscode: 2
+                    });
+                } else {
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        res.send(sign(encryptForFE(body)));
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 3
+                        })
+                    }
+                }
+            });
+        } else {
+            res.status(403);
+            res.send({
+                "error": "Not logged in"
+            });
+        }
+    } catch (err) {
+        res.status(500);
+        res.send({
+            ...err,
+            yasmscode: 1
+        });
+    }
 });
 
-app.post('/requestchat/:identity', (req, res) => {
-    // SEND REQUEST TO CENTRAL SERVER /REQUESTCHAT/:IDENTITY
-    // RESPONSE CONTAINS ADDRESS. PING ADDRESS. IF FOUND, GO ON. ELSE RETURN ERROR
-    // SEND REQUEST TO ADDRESS/RECEIVECHATREQUEST
-    // ADD TO CHATREQUESTS DB TABLE OUTGOING REQUEST
+app.post('/sendchatrequest/', (req, res) => {
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        const identitynameto = decryptedmessage.identitynameto;
+        const identitynamefrom = decryptedmessage.identitynamefrom;
+        if (myprofile.username) {
+            request.post({
+                url: centralserver + "/requestchat/" + identitynameto,
+                json: true
+            }, (err, serres, body) => {
+                if (err || serres.statusCode !== 200) {
+                    res.status(500);
+                    res.send({
+                        ...err,
+                        yasmscode: 2
+                    });
+                } else {
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        const userdata = body;
+                        userdata.key = new NodeRSA(userdata.key);
+                        request.post({
+                            url: userdata.address + "/ping",
+                            json: true
+                        }, (err, serres, body) => {
+                            if (err || serres.statusCode !== 200) {
+                                res.status(500);
+                                res.send({
+                                    ...err,
+                                    yasmscode: 3
+                                });
+                            } else {
+                                userdata.servercommunicationkey = new NodeRSA(body.keys.communication);
+                                userdata.serversigningkey = new NodeRSA(body.keys.signing);
+                                const now = (new Date()).getTime();
+                                request.post({
+                                    url: userdata.address + "/receivechatrequest",
+                                    body: {
+                                        "from": identitynamefrom,
+                                        "message": signAsUser(encryptForFriend(userdata.servercommunicationkey, JSON.stringify({
+                                            "command": "requestchat",
+                                            "from": identitynamefrom,
+                                            "to": identitynameto,
+                                            "timestamp": now
+                                        })))
+                                    },
+                                    json: true
+                                }, (err, serres, body) => {
+                                    if (err || serres.statusCode !== 200) {
+                                        res.status(500);
+                                        res.send({
+                                            ...err,
+                                            yasmscode: 4
+                                        });
+                                    } else {
+                                        body = userdata.key.decryptPublic(body).toString('utf-8');
+                                        if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                                            sqlite.insert("RECEIVEDFRIENDREQUESTS", {
+                                                receiver: identitynameto,
+                                                receivedat: now,
+                                                status: 0
+                                            }, (resp) => {
+                                                if (resp.error)
+                                                    throw res.error;
+                                                else {
+                                                    res.send(sign(encryptForFE(body)));
+                                                }
+                                            });
+                                        } else {
+                                            res.status(401);
+                                            res.send({
+                                                error: "Problem communicating with friend's server",
+                                                yasmscode: 5
+                                            });
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 6
+                        })
+                    }
+                }
+            });
+        } else {
+            res.status(403);
+            res.send({
+                "error": "Not logged in"
+            });
+        }
+    } catch (err) {
+        res.status(500);
+        res.send({
+            ...err,
+            yasmscode: 1
+        });
+    }
 });
 
 app.post('/receivechatrequest', (req, res) => {
-    // SEND REQUEST TO CENTRAL SERVER /REQUESTCHAT/:SENDER
-    // TAKE PUBLIC KEY AND TRY TO DECRYPT REQUEST. IF WORKS, GO ON. ELSE RETURN ERROR
-    // IF CHAT REQUEST IS RECENT, GO ON. ELSE RETURN ERROR
-    // ADD TO CHATREQUESTS DB TABLE INCOMING REQUEST
+    try {
+        const from = req.body.from;
+        if (myprofile.username) {
+            request.post({
+                url: centralserver + "/requestchat/" + from,
+                json: true
+            }, (err, serres, body) => {
+                if (err || serres.statusCode !== 200) {
+                    res.status(500);
+                    res.send({
+                        ...err,
+                        yasmscode: 2
+                    });
+                } else {
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        const userdata = body;
+                        userdata.key = new NodeRSA(userdata.key);
+                        const decryptedmessage = decryptFromFE(unsignFriend(userdata.key, req.message));
+                        if (
+                            command === "requestchat" &&
+                            from === decryptedmessage.from &&
+                            myprofile.identities.indexOf(decryptedmessage.to) > -1 &&
+                            decryptedCommand.timestamp >= now.getTime() - timetolive &&
+                            decryptedCommand.timestamp < now.getTime()
+                        ) {
+                            sqlite.insert("RECEIVEDFRIENDREQUESTS", {
+                                sender: decryptedmessage.from,
+                                receivedat: decryptedCommand.timestamp,
+                                status: 0
+                            }, (resp) => {
+                                if (resp.error)
+                                    throw res.error;
+                                else {
+                                    res.send(signAsUser((JSON.stringify({
+                                        "status": "success"
+                                    }))));
+                                }
+                            });
+                        } else {
+                            res.status(403);
+                            res.send({
+                                error: "Invalid command"
+                            });
+                        }
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 6
+                        })
+                    }
+                }
+            });
+        } else {
+            res.status(403);
+            res.send({
+                "error": "Not logged in"
+            });
+        }
+    } catch (err) {
+        res.status(500);
+        res.send({
+            ...err,
+            yasmscode: 1
+        });
+    }
+});
+
+app.post('/getsentchatrequests', (req, res) => {
+    try {
+        if (myprofile.username) {
+            sqlite.runAsync("SELECT * FROM SENTFRIENDREQUESTS", [], (rows) => {
+                res.send(sign(encryptForFE(rows)));
+            });
+        } else {
+            res.status(403);
+            res.send({
+                "error": "Not logged in"
+            });
+        }
+    } catch (err) {
+        res.status(500);
+        res.send({
+            ...err,
+            yasmscode: 1
+        });
+    }
+});
+
+app.post('/getreceivedchatrequests', (req, res) => {
+    try {
+        if (myprofile.username) {
+            sqlite.runAsync("SELECT * FROM RECEIVEDFRIENDREQUESTS", [], (rows) => {
+                res.send(sign(encryptForFE(rows)));
+            });
+        } else {
+            res.status(403);
+            res.send({
+                "error": "Not logged in"
+            });
+        }
+    } catch (err) {
+        res.status(500);
+        res.send({
+            ...err,
+            yasmscode: 1
+        });
+    }
 });
 
 app.post('/respondtochatrequest', (req, res) => {
@@ -252,7 +526,16 @@ app.post('/login', (req, res) => {
                                     yasmscode: 2
                                 });
                             } else {
-                                res.send(sign(encryptForFE(body)));
+                                body = unsignCS(body);
+                                if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                                    res.send(sign(encryptForFE(body)));
+                                } else {
+                                    res.status(401);
+                                    res.send({
+                                        error: "Problem with central server",
+                                        yasmscode: 3
+                                    })
+                                }
                             }
                         });
                     }
@@ -301,18 +584,27 @@ app.post('/addidentity', (req, res) => {
                         yasmscode: 2
                     });
                 } else {
-                    sqlite.insert("MYIDENTITIES", {
-                        identityname: decryptedmessage.identityname
-                    }, (resp) => {
-                        if (resp.error)
-                            throw res.error;
-                        else {
-                            myprofile.identities.push(decryptedmessage.identityname);
-                            res.send(sign(encryptForFE(JSON.stringify({
-                                "status": "success"
-                            }))));
-                        }
-                    });
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        sqlite.insert("MYIDENTITIES", {
+                            identityname: decryptedmessage.identityname
+                        }, (resp) => {
+                            if (resp.error)
+                                throw res.error;
+                            else {
+                                myprofile.identities.push(decryptedmessage.identityname);
+                                res.send(sign(encryptForFE(JSON.stringify({
+                                    "status": "success"
+                                }))));
+                            }
+                        });
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 3
+                        })
+                    }
                 }
             });
         } else {
@@ -353,22 +645,31 @@ app.post('/deleteidentity', (req, res) => {
                         yasmscode: 2
                     });
                 } else {
-                    sqlite.run("DELETE FROM MYIDENTITIES WHERE identityname = ?", [decryptedmessage.identityname], (resp) => {
-                        if (res.error) {
-                            res.status(500);
-                            res.send({
-                                ...err,
-                                yasmscode: 2
-                            });
-                        } else {
-                            if (myprofile.identities.indexOf(decryptedmessage) > -1) {
-                                myprofile.identities.splice(myprofile.identities.indexOf(req.body.identityname), 1);
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        sqlite.run("DELETE FROM MYIDENTITIES WHERE identityname = ?", [decryptedmessage.identityname], (resp) => {
+                            if (res.error) {
+                                res.status(500);
+                                res.send({
+                                    ...err,
+                                    yasmscode: 2
+                                });
+                            } else {
+                                if (myprofile.identities.indexOf(decryptedmessage) > -1) {
+                                    myprofile.identities.splice(myprofile.identities.indexOf(req.body.identityname), 1);
+                                }
+                                res.send(sign(encryptForFE(JSON.stringify({
+                                    "status": "success"
+                                }))));
                             }
-                            res.send(sign(encryptForFE(JSON.stringify({
-                                "status": "success"
-                            }))));
-                        }
-                    });
+                        });
+                    } else {
+                        res.status(401);
+                        res.send({
+                            error: "Problem with central server",
+                            yasmscode: 3
+                        });
+                    }
                 }
             });
         } else {

@@ -101,10 +101,11 @@ app.post('/register', (req, res) => {
         }, (err, serres, body) => {
             if (err || serres.statusCode !== 200) {
                 res.status(500);
-                res.send({
-                    error: err,
-                    yasmscode: 2
-                });
+
+                res.send(sign(JSON.stringify({
+                    "yasmscode": 2
+                 })));
+
             } else {
                 body = unsignCS(body);
                 if (JSON.parse(body).status && JSON.parse(body).status == "success") {
@@ -112,64 +113,64 @@ app.post('/register', (req, res) => {
                     sqlite.run("CREATE TABLE MYSIGNINGKEY(key TEXT PRIMARY KEY);", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
-                                ...resp,
-                                yasmscode: 300
-                            });
+
+                            res.send(sign(JSON.stringify({
+                                "yasmscode": 300
+                             })));
                         }
                     });
                     sqlite.run("CREATE TABLE MYIDENTITIES(identityname TEXT PRIMARY KEY);", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE RECEIVEDFRIENDREQUESTS(sender TEXT, receiver TEXT, status INTEGER, receivedat TEXT NOT NULL, PRIMARY KEY (sender, receiver, status));", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE SENTFRIENDREQUESTS(receiver TEXT, sender TEXT, status INTEGER, sentat TEXT NOT NULL, PRIMARY KEY (receiver, sender, status));", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE INCOMINGMESSAGEKEYS(for TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE OUTGOINGMESSAGEKEYS(for TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE MESSAGES(sender TEXT, receiver TEXT, sentat TEXT);", (resp) => {
                         if (resp.error) {
                             res.status(500);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 ...resp,
                                 yasmscode: 300
-                            });
+                            })));
                         }
                     });
 
@@ -191,19 +192,19 @@ app.post('/register', (req, res) => {
                     }), 'base64')));
                 } else {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 }
             }
         });
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -224,35 +225,35 @@ app.post('/updateaddress', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
                         res.send(sign(encryptForFE(body)));
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 3
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 2
-        });
+        })));
     }
 });
 
@@ -274,35 +275,35 @@ app.post('/searchidentities', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
                         res.send(sign(encryptForFE(body)));
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 3
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -318,10 +319,10 @@ app.post('/sendchatrequest/', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -333,10 +334,10 @@ app.post('/sendchatrequest/', (req, res) => {
                         }, (err, serres, body) => {
                             if (err || serres.statusCode !== 200) {
                                 res.status(500);
-                                res.send({
+                                res.send(sign(JSON.stringify({
                                     error: err,
                                     yasmscode: 3
-                                });
+                                })));
                             } else {
                                 userdata.servercommunicationkey = new NodeRSA(body.keys.communication);
                                 userdata.serversigningkey = new NodeRSA(body.keys.signing);
@@ -356,10 +357,10 @@ app.post('/sendchatrequest/', (req, res) => {
                                 }, (err, serres, body) => {
                                     if (err || serres.statusCode !== 200) {
                                         res.status(500);
-                                        res.send({
+                                        res.send(sign(JSON.stringify({
                                             error: err,
                                             yasmscode: 4
-                                        });
+                                        })));
                                     } else {
                                         body = userdata.key.decryptPublic(body).toString('utf-8');
                                         if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -371,20 +372,20 @@ app.post('/sendchatrequest/', (req, res) => {
                                             }, (resp) => {
                                                 if (resp.error) {
                                                     res.status(500);
-                                                    res.send({
+                                                    res.send(sign(JSON.stringify({
                                                         ...resp,
                                                         yasmscode: 300
-                                                    });
+                                                    })));
                                                 } else {
                                                     res.send(sign(encryptForFE(body)));
                                                 }
                                             });
                                         } else {
                                             res.status(401);
-                                            res.send({
+                                            res.send(sign(JSON.stringify({
                                                 error: "Problem communicating with friend's server",
                                                 yasmscode: 5
-                                            });
+                                            })));
                                         }
                                     }
                                 });
@@ -392,25 +393,25 @@ app.post('/sendchatrequest/', (req, res) => {
                         });
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 6
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -425,10 +426,10 @@ app.post('/receivechatrequest', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -450,10 +451,10 @@ app.post('/receivechatrequest', (req, res) => {
                             }, (resp) => {
                                 if (resp.error) {
                                     res.status(500);
-                                    res.send({
+                                    res.send(sign(JSON.stringify({
                                         ...resp,
                                         yasmscode: 300
-                                    });
+                                    })));
                                 } else {
                                     res.send(signAsUser((JSON.stringify({
                                         "status": "success"
@@ -462,31 +463,31 @@ app.post('/receivechatrequest', (req, res) => {
                             });
                         } else {
                             res.status(403);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 error: "Invalid command"
-                            });
+                            })));
                         }
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 6
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -505,10 +506,10 @@ app.post('/sendchatrequestresponse', (req, res) => {
                 }, (err, serres, body) => {
                     if (err || serres.statusCode !== 200) {
                         res.status(500);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: err,
                             yasmscode: 2
-                        });
+                        })));
                     } else {
                         body = unsignCS(body);
                         if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -520,10 +521,10 @@ app.post('/sendchatrequestresponse', (req, res) => {
                             }, (err, serres, body) => {
                                 if (err || serres.statusCode !== 200) {
                                     res.status(500);
-                                    res.send({
+                                    res.sendsign(JSON.stringify(({
                                         error: err,
                                         yasmscode: 3
-                                    });
+                                    })));
                                 } else {
                                     userdata.servercommunicationkey = new NodeRSA(body.keys.communication);
                                     userdata.serversigningkey = new NodeRSA(body.keys.signing);
@@ -550,10 +551,10 @@ app.post('/sendchatrequestresponse', (req, res) => {
                                     }, (err, serres, body) => {
                                         if (err || serres.statusCode !== 200) {
                                             res.status(500);
-                                            res.send({
+                                            res.send(sign(JSON.stringify({
                                                 error: err,
                                                 yasmscode: 4
-                                            });
+                                            })));
                                         } else {
                                             body = userdata.key.decryptPublic(body).toString('utf-8');
                                             if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -566,10 +567,10 @@ app.post('/sendchatrequestresponse', (req, res) => {
                                                 }, (resp) => {
                                                     if (resp.error) {
                                                         res.status(500);
-                                                        res.send({
+                                                        res.send(sign(JSON.stringify({
                                                             ...resp,
                                                             yasmscode: 300
-                                                        });
+                                                        })));
                                                     } else {
                                                         if (approved) {
                                                             sqlite.insert("INCOMINGMESSAGEKEYS", {
@@ -594,10 +595,10 @@ app.post('/sendchatrequestresponse', (req, res) => {
                                                 });
                                             } else {
                                                 res.status(401);
-                                                res.send({
+                                                res.send(sign(JSON.stringify({
                                                     error: "Problem communicating with friend's server",
                                                     yasmscode: 5
-                                                });
+                                                })));
                                             }
                                         }
                                     });
@@ -605,30 +606,30 @@ app.post('/sendchatrequestresponse', (req, res) => {
                             });
                         } else {
                             res.status(401);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 "error": "Problem with central server"
-                            });
+                            })));
                         }
                     }
                 });
             } else {
                 res.status(500);
-                res.send({
+                res.send(sign(JSON.stringify({
                     "error": "Invalid command"
-                });
+                })));
             }
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -643,10 +644,10 @@ app.post('/receivechatrequestresponse', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -655,7 +656,6 @@ app.post('/receivechatrequestresponse', (req, res) => {
                         const decryptedmessage = JSON.parse(decryptFromFE(unsignFriend(userdata.key, req.body.message)));
                         if (
                             decryptedmessage.command === "respondtochatrequest" &&
-                            receiver === decryptedmessage.from &&
                             decryptedmessage.timestamp >= now - timetolive &&
                             decryptedmessage.timestamp < now
                         ) {
@@ -668,12 +668,12 @@ app.post('/receivechatrequestresponse', (req, res) => {
                             }, (resp) => {
                                 if (resp.error) {
                                     res.status(500);
-                                    res.send({
+                                    res.send(sign(JSON.stringify({
                                         ...resp,
                                         yasmscode: 300
-                                    });
+                                    })));
                                 } else {
-                                    if (approved) {
+                                    if (decryptedmessage.approved) {
                                         sqlite.insert("OUTGOINGMESSAGEKEYS", {
                                             for: decryptedmessage.receiver,
                                             key: decryptedmessage.key,
@@ -681,10 +681,10 @@ app.post('/receivechatrequestresponse', (req, res) => {
                                         }, (resp) => {
                                             if (resp.error) {
                                                 res.status(500);
-                                                res.send({
+                                                res.send(sign(JSON.stringify({
                                                     ...resp,
                                                     yasmscode: 300
-                                                });
+                                                })));
                                             } else {
                                                 res.send(signAsUser((JSON.stringify({
                                                     "status": "success"
@@ -700,31 +700,31 @@ app.post('/receivechatrequestresponse', (req, res) => {
                             });
                         } else {
                             res.status(403);
-                            res.send({
+                            res.send(sign(JSON.stringify({
                                 error: "Invalid command"
-                            });
+                            })));
                         }
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 6
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -735,10 +735,10 @@ app.post('/block', (req, res) => {
             sqlite.run("DELETE FROM INCOMINGMESSAGEKEYS WHERE for = ?", [decryptedmessage.identityname], (resp) => {
                 if (resp.error) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         ...resp,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     res.send(sign(encryptForFE(JSON.stringify({
                         "status": "success"
@@ -747,16 +747,16 @@ app.post('/block', (req, res) => {
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in or invalid command"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -769,16 +769,16 @@ app.post('/getsentchatrequests', (req, res) => {
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in or invalid command"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -791,16 +791,16 @@ app.post('/getreceivedchatrequests', (req, res) => {
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in or invalid command"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -839,20 +839,20 @@ app.post('/login', (req, res) => {
                         }, (err, serres, body) => {
                             if (err || serres.statusCode !== 200) {
                                 res.status(500);
-                                res.send({
+                                res.send(sign(JSON.stringify({
                                     error: err,
                                     yasmscode: 2
-                                });
+                                })));
                             } else {
                                 body = unsignCS(body);
                                 if (JSON.parse(body).status && JSON.parse(body).status === "success") {
                                     res.send(sign(encryptForFE(body)));
                                 } else {
                                     res.status(401);
-                                    res.send({
+                                    res.send(sign(JSON.stringify({
                                         error: "Problem with central server",
                                         yasmscode: 3
-                                    })
+                                    })))
                                 }
                             }
                         });
@@ -860,22 +860,22 @@ app.post('/login', (req, res) => {
                 });
             } else {
                 res.status(403);
-                res.send({
+                res.send(sign(JSON.stringify({
                     message: "This account is not registerd on this device."
-                });
+                })));
             }
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 message: "Key file does not match provided username"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -897,10 +897,10 @@ app.post('/addidentity', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
@@ -909,10 +909,10 @@ app.post('/addidentity', (req, res) => {
                         }, (resp) => {
                             if (resp.error) {
                                 res.status(500);
-                                res.send({
+                                res.send(sign(JSON.stringify({
                                     ...resp,
                                     yasmscode: 300
-                                });
+                                })));
                             } else {
                                 myprofile.identities.push(decryptedmessage.identityname);
                                 res.send(sign(encryptForFE(JSON.stringify({
@@ -922,25 +922,25 @@ app.post('/addidentity', (req, res) => {
                         });
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 3
-                        })
+                        })))
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 
@@ -962,20 +962,20 @@ app.post('/deleteidentity', (req, res) => {
             }, (err, serres, body) => {
                 if (err || serres.statusCode !== 200) {
                     res.status(500);
-                    res.send({
+                    res.send(sign(JSON.stringify({
                         error: err,
                         yasmscode: 2
-                    });
+                    })));
                 } else {
                     body = unsignCS(body);
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
                         sqlite.run("DELETE FROM MYIDENTITIES WHERE identityname = ?", [decryptedmessage.identityname], (resp) => {
                             if (resp.error) {
                                 res.status(500);
-                                res.send({
+                                res.send(sign(JSON.stringify({
                                     ...resp,
                                     yasmscode: 2
-                                });
+                                })));
                             } else {
                                 if (myprofile.identities.indexOf(decryptedmessage) > -1) {
                                     myprofile.identities.splice(myprofile.identities.indexOf(req.body.identityname), 1);
@@ -987,25 +987,25 @@ app.post('/deleteidentity', (req, res) => {
                         });
                     } else {
                         res.status(401);
-                        res.send({
+                        res.send(sign(JSON.stringify({
                             error: "Problem with central server",
                             yasmscode: 3
-                        });
+                        })));
                     }
                 }
             });
         } else {
             res.status(403);
-            res.send({
+            res.send(sign(JSON.stringify({
                 "error": "Not logged in"
-            });
+            })));
         }
     } catch (err) {
         res.status(500);
-        res.send({
+        res.send(sign(JSON.stringify({
             error: err,
             yasmscode: 1
-        });
+        })));
     }
 });
 

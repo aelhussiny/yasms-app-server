@@ -145,7 +145,7 @@ app.post('/register', (req, res) => {
                             });
                         }
                     });
-                    sqlite.run("CREATE TABLE INCOMINGMESSAGEKEYS(between TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
+                    sqlite.run("CREATE TABLE INCOMINGMESSAGEKEYS(for TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
                         if (resp.error) {
                             res.status(500);
                             res.send({
@@ -154,7 +154,7 @@ app.post('/register', (req, res) => {
                             });
                         }
                     });
-                    sqlite.run("CREATE TABLE OUTGOINGMESSAGEKEYS(between TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
+                    sqlite.run("CREATE TABLE OUTGOINGMESSAGEKEYS(for TEXT PRIMARY KEY, key TEXT NOT NULL, createdat TEXT NOT NULL);", (resp) => {
                         if (resp.error) {
                             res.status(500);
                             res.send({
@@ -573,7 +573,7 @@ app.post('/sendchatrequestresponse', (req, res) => {
                                                     } else {
                                                         if (approved) {
                                                             sqlite.insert("INCOMINGMESSAGEKEYS", {
-                                                                between: identitynamefrom,
+                                                                for: identitynamefrom,
                                                                 key: messagingkey.exportKey('private'),
                                                                 createdat: now
                                                             }, (resp) => {
@@ -675,7 +675,7 @@ app.post('/receivechatrequestresponse', (req, res) => {
                                 } else {
                                     if (approved) {
                                         sqlite.insert("OUTGOINGMESSAGEKEYS", {
-                                            between: decryptedmessage.receiver,
+                                            for: decryptedmessage.receiver,
                                             key: decryptedmessage.key,
                                             createdat: decryptedmessage.timestamp
                                         }, (resp) => {
@@ -732,7 +732,7 @@ app.post('/block', (req, res) => {
     try {
         const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
         if (myprofile.username && decryptedmessage.command === "block") {
-            sqlite.run("DELETE FROM INCOMINGMESSAGEKEYS WHERE between = ?", [decryptedmessage.identityname], (resp) => {
+            sqlite.run("DELETE FROM INCOMINGMESSAGEKEYS WHERE for = ?", [decryptedmessage.identityname], (resp) => {
                 if (resp.error) {
                     res.status(500);
                     res.send({

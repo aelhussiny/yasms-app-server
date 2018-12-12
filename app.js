@@ -104,7 +104,7 @@ app.post('/register', (req, res) => {
 
                 res.send(sign(JSON.stringify({
                     "yasmscode": 2
-                 })));
+                })));
 
             } else {
                 body = unsignCS(body);
@@ -116,7 +116,7 @@ app.post('/register', (req, res) => {
 
                             res.send(sign(JSON.stringify({
                                 "yasmscode": 300
-                             })));
+                            })));
                         }
                     });
                     sqlite.run("CREATE TABLE MYIDENTITIES(identityname TEXT PRIMARY KEY);", (resp) => {
@@ -521,7 +521,7 @@ app.post('/sendchatrequestresponse', (req, res) => {
                             }, (err, serres, body) => {
                                 if (err || serres.statusCode !== 200) {
                                     res.status(500);
-                                    res.sendsign(JSON.stringify(({
+                                    res.send(sign(JSON.stringify({
                                         error: err,
                                         yasmscode: 3
                                     })));
@@ -618,6 +618,252 @@ app.post('/sendchatrequestresponse', (req, res) => {
                     "error": "Invalid command"
                 })));
             }
+        } else {
+            res.status(403);
+            res.send(sign(JSON.stringify({
+                "error": "Not logged in"
+            })));
+        }
+    } catch (err) {
+        res.status(500);
+        res.send(sign(JSON.stringify({
+            error: err,
+            yasmscode: 1
+        })));
+    }
+});
+
+app.post('/sendmessage', (req, res) => {
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        const identitynamefrom = decryptedmessage.from;
+        const identitynameto = decryptedmessage.to;
+        const message = decryptedmessage.message;
+        const command = decryptedmessage.command;
+        const timestamp = decryptedmessage.time;
+        if (myprofile.username) {
+            if (command === "sendmessage") {
+                request.post({
+                    url: centralserver + "/requestchat/" + identitynamefrom,
+                    json: true
+                }, (err, serres, body) => {
+                    if (err || serres.statusCode !== 200) {
+                        res.status(500);
+                        res.send(sign(JSON.stringify({
+                            error: err,
+                            yasmscode: 9
+                        })));
+                    } else {
+                        body = unsignCS(body);
+                        if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                            const userdata = JSON.parse(body);
+                            userdata.key = new NodeRSA(userdata.key);
+                            request.post({
+                                url: 'http://' + userdata.address + "/ping",
+                                json: true
+                            }, (err, serres, body) => {
+                                if (err || serres.statusCode !== 200) {
+                                    res.status(404);
+                                    res.send(sign(JSON.stringify({
+                                        error: err,
+                                        yasmscode: 3
+                                    })));
+                                } else {
+                                    userdata.servercommunicationkey = new NodeRSA(body.keys.communication);
+                                    userdata.serversigningkey = new NodeRSA(body.keys.signing);
+                                    sqlite.runAsync("SELECT * FROM OUTGOINGMESSAGEKEYS WHERE for = ?", [identitynameto], (rows) => {
+                                        if (rows) {
+                                            const friendkey = new NodeRSA(rows[0].key);
+                                            const now = (new Date()).getTime();
+                                            request.post({
+                                                url: 'http://' + userdata.address + "/receivemessage",
+                                                body: {
+                                                    "from": identitynamefrom,
+                                                    "message": signAsUser(encryptForFriend(friendkey, JSON.stringify({
+                                                        "command": "sendmessage",
+                                                        "receiver": identitynameto,
+                                                        "sender": identitynamefrom,
+                                                        "timestamp": now,
+                                                        "message": message,
+                                                        "messagetime": timestamp
+                                                    })))
+                                                },
+                                                json: true
+                                            }, (err, serres, body) => {
+                                                if (err) {
+                                                    res.status(500);
+                                                    res.send(sign(JSON.stringify({
+                                                        error: err,
+                                                        yasmscode: 4
+                                                    })));
+                                                } else if (serres.statusCode === 403) {
+                                                    body = userdata.serversigningkey.decryptPublic(body).toString('utf-8');
+                                                    if (JSON.parse(body).error && JSON.parse(body).status === "key not found") {
+                                                        sqlite.run("DELETE FROM OUTGOINGMESSAGEKEYS WHERE for = ?", [identitynameto], (resp) => {
+                                                            if (resp.error) {
+                                                                res.status(500);
+                                                                res.send(sign(JSON.stringify({
+                                                                    ...resp,
+                                                                    yasmscode: 2
+                                                                })));
+                                                            } else {
+                                                                res.status(403);
+                                                                res.send(sign(JSON.stringify({
+                                                                    "error": identitynameto + " refused message"
+                                                                })));
+                                                            }
+                                                        });
+                                                    } else {
+                                                        res.status(401);
+                                                        res.send(sign(JSON.stringify({
+                                                            error: "Problem communicating with friend's server",
+                                                            yasmscode: 5
+                                                        })));
+                                                    }
+                                                } else if (serres.statusCode != 200) {
+                                                    res.status(500);
+                                                    res.send(sign(JSON.stringify({
+                                                        error: "Other error",
+                                                        yasmscode: 6,
+                                                        body: body
+                                                    })));
+                                                } else {
+                                                    body = userdata.key.decryptPublic(body).toString('utf-8');
+                                                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                                                        sqlite.insert("MESSAGES", {
+                                                            sender: identitynamefrom,
+                                                            receiver: identitynameto,
+                                                            sentat: timestamp
+                                                        }, (resp) => {
+                                                            if (resp.error) {
+                                                                res.status(500);
+                                                                res.send(sign(JSON.stringify({
+                                                                    ...resp,
+                                                                    yasmscode: 300
+                                                                })));
+                                                            } else {
+                                                                res.send(sign(encryptForFE({
+                                                                    "status": "success"
+                                                                })));
+                                                            }
+                                                        });
+                                                    } else {
+                                                        res.status(401);
+                                                        res.send(sign(JSON.stringify({
+                                                            error: "Problem communicating with friend's server",
+                                                            yasmscode: 7
+                                                        })));
+                                                    }
+                                                }
+                                            });
+                                        } else {
+                                            res.status(403);
+                                            res.send(sign(JSON.stringify({
+                                                error: "No key found for " + identitynameto,
+                                                yasmscode: 8
+                                            })));
+                                        }
+                                    });
+
+                                }
+                            });
+                        } else {
+                            res.status(401);
+                            res.send(sign(JSON.stringify({
+                                "error": "Problem with central server"
+                            })));
+                        }
+                    }
+                });
+            } else {
+                res.status(500);
+                res.send(sign(JSON.stringify({
+                    "error": "Invalid command"
+                })));
+            }
+        } else {
+            res.status(403);
+            res.send(sign(JSON.stringify({
+                "error": "Not logged in"
+            })));
+        }
+    } catch (err) {
+        res.status(500);
+        res.send(sign(JSON.stringify({
+            error: err,
+            yasmscode: 1
+        })));
+    }
+});
+
+app.post('/receivemessage', (req, res) => {
+    try {
+        const from = req.body.from;
+        const now = (new Date()).getTime();
+        if (myprofile.username) {
+            request.post({
+                url: centralserver + "/requestchat/" + from,
+                json: true
+            }, (err, serres, body) => {
+                if (err || serres.statusCode !== 200) {
+                    res.status(500);
+                    res.send(sign(JSON.stringify({
+                        error: err,
+                        yasmscode: 2
+                    })));
+                } else {
+                    body = unsignCS(body);
+                    if (JSON.parse(body).status && JSON.parse(body).status === "success") {
+                        const userdata = JSON.parse(body);
+                        userdata.key = new NodeRSA(userdata.key);
+                        sqlite.runAsync("SELECT * FROM OUTGOINGMESSAGEKEYS WHERE for = ?", [identitynameto], (rows) => {
+                            if (rows) {
+                                const friendkey = new NodeRSA(rows[0].key);
+                                const decryptedmessage = JSON.parse(decryptFriend(friendkey, (unsignFriend(userdata.key, req.body.message))));
+                                if (
+                                    decryptedmessage.command === "sendmessage" &&
+                                    decryptedmessage.timestamp >= now - timetolive &&
+                                    decryptedmessage.timestamp < now
+                                ) {
+                                    sqlite.insert("MESSAGES", {
+                                        sender: decryptedmessage.sender,
+                                        receiver: decryptedmessage.receiver,
+                                        sentat: decryptedmessage.messagetime
+                                    }, (resp) => {
+                                        if (resp.error) {
+                                            res.status(500);
+                                            res.send(sign(JSON.stringify({
+                                                ...resp,
+                                                yasmscode: 300
+                                            })));
+                                        } else {
+                                            res.send(signAsUser({
+                                                "status": "success"
+                                            }));
+                                        }
+                                    });
+                                } else {
+                                    res.status(403);
+                                    res.send(sign(JSON.stringify({
+                                        error: "Invalid command"
+                                    })));
+                                }
+                            } else {
+                                res.status(403);
+                                res.send(sign(JSON.stringify({
+                                    error: "key not found"
+                                })));
+                            }
+                        });
+                    } else {
+                        res.status(401);
+                        res.send(sign(JSON.stringify({
+                            error: "Problem with central server",
+                            yasmscode: 6
+                        })))
+                    }
+                }
+            });
         } else {
             res.status(403);
             res.send(sign(JSON.stringify({

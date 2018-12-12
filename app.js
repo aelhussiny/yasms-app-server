@@ -34,6 +34,11 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({
     extended: true
 }));
+app.use(function (req, res, next) {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    next();
+});
 
 app.all('/ping', (req, res) => {
     res.send({
@@ -85,7 +90,9 @@ app.post('/register', (req, res) => {
     try {
         const dbkey = new NodeRSA().generateKeyPair(1024);
         const signingkey = new NodeRSA().generateKeyPair(1024);
+        console.log("reqbodymessage", req.body.message);
         const decryptedmessage = JSON.parse(decryptFromFE(req.body.message));
+        console.log(decryptedmessage);
         const username = decryptedmessage.username;
         const appcommunicationkey = new NodeRSA(decryptedmessage.communicationkey);
         request.post({
@@ -1035,6 +1042,66 @@ app.post('/getreceivedchatrequests', (req, res) => {
             sqlite.runAsync("SELECT * FROM RECEIVEDFRIENDREQUESTS WHERE status = 0", [], (rows) => {
                 res.send(sign(encryptForFE(rows)));
             });
+        } else {
+            res.status(403);
+            res.send(sign(JSON.stringify({
+                "error": "Not logged in or invalid command"
+            })));
+        }
+    } catch (err) {
+        res.status(500);
+        res.send(sign(JSON.stringify({
+            error: err,
+            yasmscode: 1
+        })));
+    }
+});
+
+app.post('/getcontacts', (req, res) => {
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        if (myprofile.username && decryptedmessage.command === "getcontacts") {
+            const contacts = [];
+            sqlite.runAsync("SELECT * FROM OUTGOINGMESSAGEKEYS", [], (rows) => {
+                rows.forEach((row) => {
+                    contacts.push(row.for);
+                });
+                sqlite.runAsync("SELECT sender FROM MESSAGES", [], (rows) => {
+                    rows.forEach((row) => {
+                        if (contacts.indexOf(row.sender) === -1) {
+                            contacts.push(row.sender);
+                        }
+                    });
+                    sqlite.runAsync("SELECT receiver FROM MESSAGES", [], (rows) => {
+                        rows.forEach((row) => {
+                            if (contacts.indexOf(row.receiver) === -1) {
+                                contacts.push(row.receiver);
+                            }
+                        });
+                        res.send(sign(encryptForFE(JSON.stringify(contacts))));
+                    });
+                });
+            });
+        } else {
+            res.status(403);
+            res.send(sign(JSON.stringify({
+                "error": "Not logged in or invalid command"
+            })));
+        }
+    } catch (err) {
+        res.status(500);
+        res.send(sign(JSON.stringify({
+            error: err,
+            yasmscode: 1
+        })));
+    }
+});
+
+app.post('/getidentities', (req, res) => {
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        if (myprofile.username && decryptedmessage.command === "getcontacts") {
+            res.send(sign(encryptForFE(JSON.stringify(myprofile.identities))));
         } else {
             res.status(403);
             res.send(sign(JSON.stringify({

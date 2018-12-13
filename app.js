@@ -1100,7 +1100,7 @@ app.post('/getcontacts', (req, res) => {
 app.post('/getidentities', (req, res) => {
     try {
         const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
-        if (myprofile.username && decryptedmessage.command === "getcontacts") {
+        if (myprofile.username && decryptedmessage.command === "getidentities") {
             res.send(sign(encryptForFE(JSON.stringify(myprofile.identities))));
         } else {
             res.status(403);

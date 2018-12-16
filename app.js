@@ -70,6 +70,10 @@ const unsignFriend = (friendkey, msg) => {
     return friendkey.decryptPublic(msg).toString('utf-8');
 }
 
+const decryptFriend = (friendkey, msg) => {
+    return friendkey.decrypt(msg).toString('utf-8');
+}
+
 const decryptFromFE = (msg) => {
     return servercommunicationkey.decrypt(msg).toString('utf-8');
 }
@@ -567,13 +571,7 @@ app.post('/sendchatrequestresponse', (req, res) => {
                                         } else {
                                             body = userdata.key.decryptPublic(body).toString('utf-8');
                                             if (JSON.parse(body).status && JSON.parse(body).status === "success") {
-                                                sqlite.update("RECEIVEDFRIENDREQUESTS", {
-                                                    status: approved ? 1 : -1
-                                                }, {
-                                                    sender: identitynamefrom,
-                                                    receiver: identitynameto,
-                                                    status: 0
-                                                }, (resp) => {
+                                                sqlite.runAsync("UPDATE OR REPLACE RECEIVEDFRIENDREQUESTS SET status = ? WHERE sender = ? AND receiver = ? AND status = 0", [approved ? 1 : -1, identitynamefrom, identitynameto], (resp) => {
                                                     if (resp.error) {
                                                         res.status(500);
                                                         res.send(sign(JSON.stringify({
@@ -654,7 +652,7 @@ app.post('/sendmessage', (req, res) => {
         if (myprofile.username) {
             if (command === "sendmessage") {
                 request.post({
-                    url: centralserver + "/requestchat/" + identitynamefrom,
+                    url: centralserver + "/requestchat/" + identitynameto,
                     json: true
                 }, (err, serres, body) => {
                     if (err || serres.statusCode !== 200) {
@@ -689,6 +687,7 @@ app.post('/sendmessage', (req, res) => {
                                                 url: 'http://' + userdata.address + "/receivemessage",
                                                 body: {
                                                     "from": identitynamefrom,
+                                                    "to": identitynameto,
                                                     "message": signAsUser(encryptForFriend(friendkey, JSON.stringify({
                                                         "command": "sendmessage",
                                                         "receiver": identitynameto,
@@ -708,7 +707,7 @@ app.post('/sendmessage', (req, res) => {
                                                     })));
                                                 } else if (serres.statusCode === 403) {
                                                     body = userdata.serversigningkey.decryptPublic(body).toString('utf-8');
-                                                    if (JSON.parse(body).error && JSON.parse(body).status === "key not found") {
+                                                    if (JSON.parse(body).error && JSON.parse(body).error === "key not found") {
                                                         sqlite.run("DELETE FROM OUTGOINGMESSAGEKEYS WHERE for = ? AND talkingto = ?", [identitynameto, identitynamefrom], (resp) => {
                                                             if (resp.error) {
                                                                 res.status(500);
@@ -810,7 +809,9 @@ app.post('/sendmessage', (req, res) => {
 app.post('/receivemessage', (req, res) => {
     try {
         const from = req.body.from;
+        const to = req.body.to;
         const now = (new Date()).getTime();
+        console.log("RECEIVING MESSAGE FROM", from, "TO", to);
         if (myprofile.username) {
             request.post({
                 url: centralserver + "/requestchat/" + from,
@@ -827,14 +828,17 @@ app.post('/receivemessage', (req, res) => {
                     if (JSON.parse(body).status && JSON.parse(body).status === "success") {
                         const userdata = JSON.parse(body);
                         userdata.key = new NodeRSA(userdata.key);
-                        sqlite.runAsync("SELECT * FROM INCOMINGMESSAGEKEYS WHERE for = ? AND talkingto = ?", [identitynameto, identitynamefrom], (rows) => {
-                            if (rows) {
+                        sqlite.runAsync("SELECT * FROM INCOMINGMESSAGEKEYS WHERE for = ? AND talkingto = ?", [from, to], (rows) => {
+                            if (rows && rows.length > 0) {
                                 const friendkey = new NodeRSA(rows[0].key);
                                 const decryptedmessage = JSON.parse(decryptFriend(friendkey, (unsignFriend(userdata.key, req.body.message))));
+                                console.log(decryptedmessage.command, decryptedmessage.timestamp, decryptedmessage.sender, from, decryptedmessage.receiver, to);
                                 if (
                                     decryptedmessage.command === "sendmessage" &&
                                     decryptedmessage.timestamp >= now - timetolive &&
-                                    decryptedmessage.timestamp < now
+                                    decryptedmessage.timestamp < now &&
+                                    decryptedmessage.sender === from &&
+                                    decryptedmessage.receiver === to
                                 ) {
                                     sqlite.insert("MESSAGES", {
                                         sender: decryptedmessage.sender,
@@ -917,13 +921,7 @@ app.post('/receivechatrequestresponse', (req, res) => {
                             decryptedmessage.timestamp >= now - timetolive &&
                             decryptedmessage.timestamp < now
                         ) {
-                            sqlite.update("SENTFRIENDREQUESTS", {
-                                status: decryptedmessage.approved ? 1 : -1
-                            }, {
-                                sender: decryptedmessage.sender,
-                                receiver: decryptedmessage.receiver,
-                                status: 0
-                            }, (resp) => {
+                            sqlite.runAsync("UPDATE OR REPLACE SENTFRIENDREQUESTS SET status = ? WHERE sender = ? AND receiver = ? AND status = 0", [decryptedmessage.approved ? 1 : -1, decryptedmessage.sender, decryptedmessage.receiver], (resp) => {
                                 if (resp.error) {
                                     res.status(500);
                                     res.send(sign(JSON.stringify({
@@ -1042,6 +1040,32 @@ app.post('/block', (req, res) => {
                         "status": "success"
                     }))));
                 }
+            });
+        } else {
+            res.status(403);
+            res.send(sign(JSON.stringify({
+                "error": "Not logged in or invalid command"
+            })));
+        }
+    } catch (err) {
+        res.status(500);
+        res.send(sign(JSON.stringify({
+            error: err,
+            yasmscode: 1
+        })));
+    }
+});
+
+app.post('/getmessages', (req, res) => {
+    try {
+        const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
+        console.log("SELECT * FROM MESSAGES WHERE (SENDER = '"+ decryptedmessage.persona +"' AND RECEIVER = '"+ decryptedmessage.personb +"') OR (SENDER = '"+ decryptedmessage.personb +"' AND RECEIVER = '"+ decryptedmessage.persona +"') ORDER BY sentat");
+        if (myprofile.username && decryptedmessage.command === "getmessages") {
+            sqlite.runAsync("SELECT * FROM MESSAGES WHERE (SENDER = ? AND RECEIVER = ?) OR (SENDER = ? AND RECEIVER = ?) ORDER BY sentat", [decryptedmessage.persona, decryptedmessage.personb, decryptedmessage.personb, decryptedmessage.persona], (rows) => {
+                res.send(sign(encryptForFE({
+                    status: "success",
+                    messages: rows
+                })));
             });
         } else {
             res.status(403);

@@ -94,9 +94,7 @@ app.post('/register', (req, res) => {
     try {
         const dbkey = new NodeRSA().generateKeyPair(1024);
         const signingkey = new NodeRSA().generateKeyPair(1024);
-        console.log("reqbodymessage", req.body.message);
         const decryptedmessage = JSON.parse(decryptFromFE(req.body.message));
-        console.log(decryptedmessage);
         const username = decryptedmessage.username;
         const appcommunicationkey = new NodeRSA(decryptedmessage.communicationkey);
         request.post({
@@ -811,7 +809,6 @@ app.post('/receivemessage', (req, res) => {
         const from = req.body.from;
         const to = req.body.to;
         const now = (new Date()).getTime();
-        console.log("RECEIVING MESSAGE FROM", from, "TO", to);
         if (myprofile.username) {
             request.post({
                 url: centralserver + "/requestchat/" + from,
@@ -832,7 +829,6 @@ app.post('/receivemessage', (req, res) => {
                             if (rows && rows.length > 0) {
                                 const friendkey = new NodeRSA(rows[0].key);
                                 const decryptedmessage = JSON.parse(decryptFriend(friendkey, (unsignFriend(userdata.key, req.body.message))));
-                                console.log(decryptedmessage.command, decryptedmessage.timestamp, decryptedmessage.sender, from, decryptedmessage.receiver, to);
                                 if (
                                     decryptedmessage.command === "sendmessage" &&
                                     decryptedmessage.timestamp >= now - timetolive &&
@@ -1059,7 +1055,6 @@ app.post('/block', (req, res) => {
 app.post('/getmessages', (req, res) => {
     try {
         const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
-        console.log("SELECT * FROM MESSAGES WHERE (SENDER = '"+ decryptedmessage.persona +"' AND RECEIVER = '"+ decryptedmessage.personb +"') OR (SENDER = '"+ decryptedmessage.personb +"' AND RECEIVER = '"+ decryptedmessage.persona +"') ORDER BY sentat");
         if (myprofile.username && decryptedmessage.command === "getmessages") {
             sqlite.runAsync("SELECT * FROM MESSAGES WHERE (SENDER = ? AND RECEIVER = ?) OR (SENDER = ? AND RECEIVER = ?) ORDER BY sentat", [decryptedmessage.persona, decryptedmessage.personb, decryptedmessage.personb, decryptedmessage.persona], (rows) => {
                 res.send(sign(encryptForFE({

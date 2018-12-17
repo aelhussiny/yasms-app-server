@@ -1326,6 +1326,7 @@ app.post('/addidentity', (req, res) => {
     }
 });
 
+/*
 app.post('/deleteidentity', (req, res) => {
     try {
         const decryptedmessage = JSON.parse(decryptFromFE(unsignFE(req.body.message)));
@@ -1390,6 +1391,7 @@ app.post('/deleteidentity', (req, res) => {
         })));
     }
 });
+*/
 
 const server = http.createServer(app);
 
